@@ -83,24 +83,22 @@ class Product(models.Model):                #Product
     DiscountedAmount=models.IntegerField(blank=True,null=True)
     taxedAmount=models.IntegerField(blank=True,null=True)
     
-    def get_discount(self,*args,**kwargs):
+    def save(self,*args,**kwargs):
         if self.discount.Discount_value>0:
             self.DiscountedAmount=self.prices-(self.prices * self.discount.Discount_value)/100
-            
-            if self.DiscountedAmount>0<self.tax.tax_type :
-                self.taxedAmount=self.DiscountedAmount-(self.DiscountedAmount * self.tax.tax_value)/100
-                super().save(*args,**kwargs)
-            else :
-                raise
-            super().save(*args,**kwargs)
-            
+            # super().save(*args,**kwargs)
         else:
             raise
-    def get_tax(self,*args,**kwargs):
-            self.taxedAmount=self.prices-(self.prices*self.tax.tax_value)/100
-            super().save(*args,**kwargs)
-            
-    def get_price_on_Quantity(self,*args, **kwargs):
+        if self.discount.Discount_value>0<self.tax.tax_value :
+            self.taxedAmount=self.DiscountedAmount-(self.DiscountedAmount * self.tax.tax_value)/100
+            # super().save(*args,**kwargs)
+        else :
+            raise
+        self.taxedAmount=self.prices-(self.prices*self.tax.tax_value)/100
+        # super().save(*args,**kwargs)    
+        
         self.prices=self.prices*self.quantity
-        super().save(*args,**kwargs)
+        super().save(*args,**kwargs)    
+        
+        
         
