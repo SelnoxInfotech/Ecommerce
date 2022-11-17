@@ -86,17 +86,13 @@ class Product(models.Model):                #Product
     def save(self,*args,**kwargs):
         if self.discount.Discount_value>0:
             self.DiscountedAmount=self.prices-(self.prices * self.discount.Discount_value)/100
-            # super().save(*args,**kwargs)
         else:
             raise
         if self.discount.Discount_value>0<self.tax.tax_value :
             self.taxedAmount=self.DiscountedAmount-(self.DiscountedAmount * self.tax.tax_value)/100
-            # super().save(*args,**kwargs)
         else :
             raise
         self.taxedAmount=self.prices-(self.prices*self.tax.tax_value)/100
-        # super().save(*args,**kwargs)    
-        
         self.prices=self.prices*self.quantity
         super().save(*args,**kwargs)    
         
