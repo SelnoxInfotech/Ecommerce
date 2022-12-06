@@ -698,8 +698,8 @@ class CouponFilter(FilterSet):
     max_value = NumberFilter(name='value', lookup_expr='lte')
 
     class Meta:
-        model = apps.get_model('coupons.Coupon')
-        fields = ['user', 'bound', 'type', 'min_value', 'max_value']
+        model = Coupon
+        fields = '__all__'
         
 from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
