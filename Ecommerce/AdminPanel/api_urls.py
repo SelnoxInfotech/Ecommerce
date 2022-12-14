@@ -25,8 +25,11 @@ urlpatterns = [
     path('update-SubCategory/<int:id>', UpdateSubCategories.as_view()),
     path('delete-SubCategory/<int:id>', DeleteSubCategory.as_view()),
     ###################################################################################################
-    path("get-details",UserDetailAPI.as_view()),
-    path('register',RegisterUserAPIView.as_view()),
+    path("get-details",LoginAPI.as_view()),
+    path('register',RegisterAPI.as_view()),
+    path('VerifyOtp',VerifyOtp.as_view()),
+    path('logout/',knox_views.LogoutView.as_view(),name='logout'),
+    path('logoutall/',knox_views.LogoutAllView.as_view(),name='logoutall'),
     ####################################################################################################
     path('Add-Country', AddCountry.as_view()),
     path('Get-Country', GetCountry.as_view()),
