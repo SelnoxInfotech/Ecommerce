@@ -160,10 +160,10 @@ class CouponSerializer(serializers.ModelSerializer):
         return Coupon.objects.create(**validated_data)
 
     class Meta:
-        model = apps.get_model('coupons.Coupon')
+        model = Coupon
         fields = ('created', 'updated', 'code',
                   'code_l', 'type', 'expires',
-                  'bound', 'user', 'repeat',
+                  'bound',  'repeat',
                   'value', 'id')
 
 
@@ -191,8 +191,8 @@ class ClaimedCouponSerializer(serializers.ModelSerializer):
         return data
 
     class Meta:
-        model = apps.get_model('coupons.ClaimedCoupon')
-        fields = ('redeemed', 'coupon', 'user', 'id')
+        model = ClaimedCoupon
+        fields = ('redeemed', 'coupon','id')
         
 
 class GiftVoucherSerializer(serializers.ModelSerializer):
