@@ -12,28 +12,112 @@ from rest_framework.parsers import MultiPartParser,FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
 
-from rest_framework.permissions import AllowAny
 from .serializer import UserSerializer,RegisterSerializer,Serializer_Store,Serializer_News,Serializer_Net_Weight,Serializer_Flavour,GiftVoucherSerializer,ClaimedGiftVoucherSerializer
+from rest_framework import generics, permissions
+from rest_framework.response import Response
+from knox.models import AuthToken
+from .serializer import UserSerializer,  RegisterSerializer,VerifyAccountSerializer
+from django.contrib.auth import login
 from django.contrib.auth.models import User
-from rest_framework.authentication import TokenAuthentication
 
+from rest_framework.authtoken.serializers import AuthTokenSerializer
+from knox.views import LoginView as KnoxLoginView
+
+from Ecommerce.settings import EMAIL_BACKEND,EMAIL_HOST,EMAIL_HOST_USER,EMAIL_HOST_PASSWORD,EMAIL_PORT,EMAIL_USE_TLS,DEFAULT_FROM_EMAIL 
+import smtplib
+import random
+Otp=random.randint(1000, 9999)
 # Class based view to Get User Details using Token Authentication
-class UserDetailAPI(APIView):
-  authentication_classes = (TokenAuthentication,)
-  permission_classes = (AllowAny,)
-  def get(self,request,*args,**kwargs):
-    user = User.objects.get(id=request.user.id)
-    serializer = UserSerializer(user)
-    return Response(serializer.data)
+def send_OneToOneMail(from_email='',to_emails=''):
+    server=smtplib.SMTP(EMAIL_HOST,EMAIL_PORT)
+    server.ehlo()
+    server.starttls()
+    server.login(EMAIL_HOST_USER,EMAIL_HOST_PASSWORD)
+    Subject="Selnox"
+    Text="Your One Time Password is "  + str(Otp)
+    
+    msg='Subject: {}\n\n{}'.format(Subject, Text)
+    server.sendmail(from_email,to_emails,msg)
+    user=User.objects.get(email=to_emails)
+    user.otp=Otp
+    user.save()
+    server.quit()
+    
+class VerifyOtp(APIView):
+    def post(self,request):
+        data=request.data
+        serializer=VerifyAccountSerializer(data=data)
+        serializer.is_valid()
+        email=serializer.data['email']
+        send_OneToOneMail(from_email='smtpselnox@gmail.com',to_emails=email)
+        otp=serializer.data['OTP']
+        
+        user=User.objects.filter(email=email)
+        if not user.exists():
+            return Response({
+                'message':'Something goes wrong',
+                'data':'invalid Email'
+            })
+        if user[0].otp != otp:
+            return Response({
+                'message':'Something goes wrong',
+                'data':'invalid Otp'
+            })
+        user=user.first()
+        user.is_verified=True
+        user.save()
+        return Response({
+                'message':'User is Verified',
+                'data':{}
+            })
+    
+    
+    
+    
+class LoginAPI(KnoxLoginView):
+    permission_classes=(permissions.AllowAny,)
+
+
+    def post(self,request,format=None):
+        serializer=AuthTokenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user=serializer.validated_data['user']
+        email=serializer.validated_data['email']
+        otp=serializer.validated_data['OTP']
+        
+        user=User.objects.filter(email=email)
+        if not user.exists():
+            return Response({
+                'message':'Something goes wrong',
+                'data':'invalid Email'
+            })
+        if user[0].otp != otp:
+            return Response({
+                'message':'Something goes wrong',
+                'data':'invalid Otp'
+            })
+        user=user.first()
+         
+        login(request,user)
+        return super(LoginAPI,self).post(request,format=None)
 
 #Class based view to register user
-class RegisterUserAPIView(generics.CreateAPIView):
-  permission_classes = (AllowAny,)
-  serializer_class = RegisterSerializer
+class RegisterAPI(generics.GenericAPIView):
+    serializer_class =RegisterSerializer
 
+    def post(self,request,*args,**kwargs):
+        serializer=self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user=serializer.save()
+        email=serializer.validated_data['email']
+        
+        return Response({
+        "user":UserSerializer(user,context=self.get_serializer_context()).data,
+        "token":AuthToken.objects.create(user)[1]
+        })
 #Category Api
 class GetCategories(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Category.objects.select_related().all()
@@ -42,7 +126,7 @@ class GetCategories(APIView):
         return Response(serialize.data)
     
 class AddCategories(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Category(data=request.data, partial=True)
@@ -52,9 +136,8 @@ class AddCategories(APIView):
         else:
             return Response({"status": "error", "data": serializer.errors})
 
-
 class UpdateCategories(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Category.objects.get(id=id)
@@ -65,9 +148,8 @@ class UpdateCategories(APIView):
         else:
             return Response({"status": "error", "data": serializer.errors})
 
-
 class DeleteCategory(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def delete(self, request, id=None):
         User = get_object_or_404(Category, id=id)
@@ -77,15 +159,15 @@ class DeleteCategory(APIView):
  
 #Sub Category Api
 class GetSubCategories(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = SubCategory.objects.select_related().all()
         serialize = Serializer_SubCategory(User, many=True)
         return Response(serialize.data)
-    
+
 class AddSubCategories(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_SubCategory(data=request.data, partial=True)
@@ -97,7 +179,7 @@ class AddSubCategories(APIView):
 
 
 class UpdateSubCategories(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = SubCategory.objects.get(id=id)
@@ -110,7 +192,7 @@ class UpdateSubCategories(APIView):
 
 
 class DeleteSubCategory(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def delete(self, request, id=None):
         User = get_object_or_404(SubCategory, id=id)
@@ -121,7 +203,7 @@ class DeleteSubCategory(APIView):
 
 #Country
 class GetCountry(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Countries.objects.select_related().all()
@@ -130,7 +212,7 @@ class GetCountry(APIView):
         return Response(serialize.data)
     
 class AddCountry(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Country(data=request.data, partial=True)
@@ -142,7 +224,7 @@ class AddCountry(APIView):
 
 
 class UpdateCountry(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Countries.objects.get(id=id)
@@ -155,7 +237,7 @@ class UpdateCountry(APIView):
 
 
 class DeleteCountry(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def delete(self, request, id=None):
         User = get_object_or_404(Countries, id=id)
@@ -165,7 +247,7 @@ class DeleteCountry(APIView):
     
 #States
 class GetStates(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = States.objects.select_related().all()
@@ -174,7 +256,7 @@ class GetStates(APIView):
         return Response(serialize.data)
     
 class AddStates(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_States(data=request.data, partial=True)
@@ -186,7 +268,7 @@ class AddStates(APIView):
 
 
 class UpdateStates(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = States.objects.get(id=id)
@@ -199,15 +281,16 @@ class UpdateStates(APIView):
 
 
 class DeleteStates(APIView):
-        def delete(self, request, id=None):
-            User = get_object_or_404(States, id=id)
-            User.delete()
-            return Response({"status": "success", "data": "Deleted"})
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, id=None):
+        User = get_object_or_404(States, id=id)
+        User.delete()
+        return Response({"status": "success", "data": "Deleted"})
     
     
 #Cities 
 class GetCities(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Cities.objects.select_related().all()
@@ -216,7 +299,7 @@ class GetCities(APIView):
         return Response(serialize.data)
     
 class AddCities(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Cities(data=request.data, partial=True)
@@ -228,7 +311,7 @@ class AddCities(APIView):
 
 
 class UpdateCities(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Cities.objects.get(id=id)
@@ -241,24 +324,25 @@ class UpdateCities(APIView):
 
 
 class DeleteCities(APIView):
-        def delete(self, request, id=None):
-            User = get_object_or_404(Cities, id=id)
-            User.delete()
-            return Response({"status": "success", "data": "Deleted"})
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, id=None):
+        User = get_object_or_404(Cities, id=id)
+        User.delete()
+        return Response({"status": "success", "data": "Deleted"})
         
         
 #Product
 class GetProduct(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Product.objects.select_related().all()
         serialize = Serializer_Product(User, many=True)
         
         return Response(serialize.data)
-    
+
 class AddProduct(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Product(data=request.data, partial=True)
@@ -270,7 +354,7 @@ class AddProduct(APIView):
     
 
 class UpdateProduct(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Product.objects.get(id=id)
@@ -283,15 +367,16 @@ class UpdateProduct(APIView):
 
 
 class DeleteProduct(APIView):
-        def delete(self, request, id=None):
-            User = get_object_or_404(Product, id=id)
-            User.delete()
-            return Response({"status": "success", "data": "Deleted"})
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, id=None):
+        User = get_object_or_404(Product, id=id)
+        User.delete()
+        return Response({"status": "success", "data": "Deleted"})
         
         
 #Brand
 class GetBrand(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Brand.objects.select_related().all()
@@ -300,7 +385,7 @@ class GetBrand(APIView):
         return Response(serialize.data)
     
 class AddBrand(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Brand(data=request.data, partial=True)
@@ -312,7 +397,7 @@ class AddBrand(APIView):
 
 
 class UpdateBrand(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Brand.objects.get(id=id)
@@ -325,23 +410,24 @@ class UpdateBrand(APIView):
 
 
 class DeleteBrand(APIView): 
-        def delete(self, request, id=None):
-            User = get_object_or_404(Brand, id=id)
-            User.delete()
-            return Response({"status": "success", "data": "Deleted"})
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, id=None):
+        User = get_object_or_404(Brand, id=id)
+        User.delete()
+        return Response({"status": "success", "data": "Deleted"})
         
 
 #tax
 class GetTax(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = taxes.objects.select_related().all()
         serialize = Serializer_tax(User, many=True)
         return Response(serialize.data)
     
-class AddTax(APIView):
-    # permission_classes = [IsAuthenticated]
+class AddTax(APIView): 
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_tax(data=request.data, partial=True)
@@ -353,7 +439,7 @@ class AddTax(APIView):
 
 
 class UpdateTax(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = taxes.objects.get(id=id)
@@ -366,17 +452,19 @@ class UpdateTax(APIView):
 
 
 class DeleteTax(APIView): 
-        def delete(self, request, id=None):
-            User = get_object_or_404(taxes, id=id)
-            User.delete()
-            return Response({"status": "success", "data": "Deleted"})
-        
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, id=None):
+        User = get_object_or_404(taxes, id=id)
+        User.delete()
+        return Response({"status": "success", "data": "Deleted"})
+    
 
 
 
 #Discount
 class GetDiscount(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Discount.objects.select_related().all()
@@ -384,7 +472,7 @@ class GetDiscount(APIView):
         return Response(serialize.data)
     
 class AddDiscount(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Discount(data=request.data, partial=True)
@@ -396,7 +484,7 @@ class AddDiscount(APIView):
 
 
 class UpdateDiscount(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Discount.objects.get(id=id)
@@ -409,6 +497,8 @@ class UpdateDiscount(APIView):
 
 
 class DeleteDiscount(APIView): 
+    permission_classes = [IsAuthenticated]
+    
     def delete(self, request, id=None):
         User = get_object_or_404(Discount, id=id)
         User.delete()
@@ -468,6 +558,8 @@ class MultipleImageUpload(viewsets.ModelViewSet):
 
 
 class ProductViewSet(ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    
     filter_backends = (SearchFilter, OrderingFilter, DjangoFilterBackend)
     serializer_class=Serializer_Product
     def get_queryset(self):
@@ -480,7 +572,7 @@ class ProductViewSet(ModelViewSet):
 
 #Stores 
 class GetStores(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Stores.objects.select_related().all()
@@ -488,7 +580,7 @@ class GetStores(APIView):
         return Response(serialize.data)
     
 class AddStores(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Store(data=request.data, partial=True)
@@ -500,7 +592,7 @@ class AddStores(APIView):
 
 
 class UpdateStores(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Stores.objects.get(id=id)
@@ -513,6 +605,8 @@ class UpdateStores(APIView):
 
 
 class DeleteStores(APIView): 
+    permission_classes = [IsAuthenticated]
+    
     def delete(self, request, id=None):
         User = get_object_or_404(Stores, id=id)
         User.delete()
@@ -522,6 +616,7 @@ class DeleteStores(APIView):
 
 
 class Adding_Multiple_Store(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset=Stores.objects.all()
     serializer_class=Serializer_Store
     def post(self, request, *args, **kwargs):
@@ -551,6 +646,7 @@ class Adding_Multiple_Store(viewsets.ModelViewSet):
 from rest_framework import filters
 
 class Get_Deal(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
     queryset = Product.objects.all()
     serializer_class = Serializer_Product
     filter_backends = [filters.SearchFilter]
@@ -559,7 +655,7 @@ class Get_Deal(generics.ListAPIView):
     
 #News
 class GetNews(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = News.objects.select_related().all()
@@ -567,7 +663,7 @@ class GetNews(APIView):
         return Response(serialize.data)
     
 class AddNews(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_News(data=request.data, partial=True)
@@ -579,7 +675,7 @@ class AddNews(APIView):
 
 
 class UpdateNews(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = News.objects.get(id=id)
@@ -592,6 +688,8 @@ class UpdateNews(APIView):
 
 
 class DeleteNews(APIView): 
+    permission_classes = [IsAuthenticated]
+    
     def delete(self, request, id=None):
         User = get_object_or_404(News, id=id)
         User.delete()
@@ -601,7 +699,7 @@ class DeleteNews(APIView):
     
 #NET Weight 
 class GetNet_Weight(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Net_Weight.objects.select_related().all()
@@ -609,7 +707,7 @@ class GetNet_Weight(APIView):
         return Response(serialize.data)
     
 class AddNet_Weight(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Net_Weight(data=request.data, partial=True)
@@ -621,7 +719,7 @@ class AddNet_Weight(APIView):
 
 
 class UpdateNet_Weight(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Net_Weight.objects.get(id=id)
@@ -634,6 +732,8 @@ class UpdateNet_Weight(APIView):
 
 
 class DeleteNet_Weight(APIView): 
+    permission_classes = [IsAuthenticated]
+    
     def delete(self, request, id=None):
         User = get_object_or_404(Net_Weight, id=id)
         User.delete()
@@ -642,7 +742,7 @@ class DeleteNet_Weight(APIView):
 
 #Flavours 
 class GetFlavours(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None):
         User = Flavours.objects.select_related().all()
@@ -650,7 +750,7 @@ class GetFlavours(APIView):
         return Response(serialize.data)
     
 class AddFlavours(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = Serializer_Flavour(data=request.data, partial=True)
@@ -662,7 +762,7 @@ class AddFlavours(APIView):
 
 
 class UpdateFlavours(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, id=None):
         User = Flavours.objects.get(id=id)
@@ -675,6 +775,8 @@ class UpdateFlavours(APIView):
 
 
 class DeleteFlavours(APIView): 
+    permission_classes = [IsAuthenticated]
+    
     def delete(self, request, id=None):
         User = get_object_or_404(Flavours, id=id)
         User.delete()
@@ -698,8 +800,8 @@ class CouponFilter(FilterSet):
     max_value = NumberFilter(name='value', lookup_expr='lte')
 
     class Meta:
-        model = Coupon
-        fields = '__all__'
+        model = apps.get_model('coupons.Coupon')
+        fields = ['user', 'bound', 'type', 'min_value', 'max_value']
         
 from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
@@ -1079,10 +1181,65 @@ import pandas as pd
 import uuid
 
 class ExportImportExcel(APIView):
+    permission_classes = [IsAuthenticated]
+    
     def get(self,request):
         User = Product.objects.all()
         serialize = Serializer_Product(User, many=True)
         df=pd.DataFrame(serialize.data)
         df.to_csv(f'/home/selnoxinfotech/Ecommerce/media/excel{uuid.uuid4()}.csv',encoding="UTF-8",index=False)
         return Response(serialize.data)
-        
+    
+    
+    
+####################################################################################################################################
+###################Count############################################################################################################
+####################################################################################################################################
+
+class GetCountCategories(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        count=Category.objects.all().count()
+        return Response(count)
+    
+
+
+class GetCountSubCategories(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        count=SubCategory.objects.all().count()
+        return Response(count)
+    
+
+class GetCountProduct(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        count=Product.objects.all().count()
+        return Response(count)
+    
+class GetCountBrand(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        count=Brand.objects.all().count()
+        return Response(count)
+    
+class GetCountStore(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        count=Stores.objects.all().count()
+        return Response(count)
+    
+class GetCountNews(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        count=News.objects.all().count()
+        return Response(count)
+    
+
+    
