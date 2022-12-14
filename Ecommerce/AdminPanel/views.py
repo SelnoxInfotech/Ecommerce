@@ -793,7 +793,7 @@ class DeleteFlavours(APIView):
 #Coupon
 from django_filters import FilterSet, NumberFilter
 from django.apps import apps
-
+from .Coupoun import Coupon,ClaimedCoupon
 
 class CouponFilter(FilterSet):
     min_value = NumberFilter(name='value', lookup_expr='gte')
@@ -812,7 +812,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 
 from .views import CouponFilter
-from .Coupoun import Coupon,ClaimedCoupon
+
 from .serializer import CouponSerializer,ClaimedCouponSerializer,ClaimGiftVoucher,GiftVoucher
 
 
