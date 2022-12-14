@@ -2,6 +2,7 @@ from django.urls import path
 from .views import *
 from .serializer import *
 from rest_framework import routers
+from knox import views as knox_views
 from . import views
 router=routers.SimpleRouter()
 router.register(r'ProductViewSet',views.ProductViewSet,basename="ProductViewSet")
