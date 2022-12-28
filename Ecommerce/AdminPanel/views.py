@@ -1694,5 +1694,51 @@ class TotalProductGraph(APIView):
         except Exception as e:
             return Response({'error' : str(e)},status=500)
 
+        
+# importing group class from django
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 
+# import User model
+class Test(APIView):
+    def post(self,request):
+        try:
+            groupname=request.data.get("groupname")
+            Admin, created = Group.objects.get_or_create(name =groupname)
+            Vendor, created = Group.objects.get_or_create(name =groupname)
+            DeliveryBoy, created = Group.objects.get_or_create(name =groupname)
+            
 
+            # Code to add permission to group
+            ct = ContentType.objects.get_for_model(Product,Stores)
+            post_permission = Permission.objects.filter(content_type=ct)
+            print([perm.codename for perm in post_permission])
+            # => ['add_post', 'change_post', 'delete_post', 'view_post']
+
+            for perm in post_permission:
+                if perm.codename == "delete_product" :
+                    DeliveryBoy.permissions.add(perm)
+
+                elif perm.codename == "change_product":
+                    Vendor.permissions.add(perm)
+                    DeliveryBoy.permissions.add(perm)
+                elif perm.codename == "view_product":
+                    Vendor.permissions.add(perm)
+                else:
+                    Vendor.permissions.add(perm)
+                    DeliveryBoy.permissions.add(perm)
+            
+            if groupname=="ADMIN" or groupname=="admin" or groupname=="Admin":
+                permission = Permission.objects.all()
+                for i in permission:
+                    Admin.permissions.add(i)
+
+            
+            response={
+                'message':'Group Added SuccessFully'
+                # 'data':{"group":new_group}
+            }
+            return Response(response)
+        except Exception as e:
+            return Response({'error' : str(e)},status=500)
+        
