@@ -117,6 +117,7 @@ urlpatterns = [
     path('Get-CountSubCategories/', GetCountSubCategories.as_view()),
     #############################################################################################################################
     path('Get-TotalProductGraph/', TotalProductGraph.as_view()),
+    path('Get-Test/', Test.as_view()),
     
     
     
