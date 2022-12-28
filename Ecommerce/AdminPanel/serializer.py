@@ -14,22 +14,26 @@ class Serializer_Category(serializers.ModelSerializer):
         
 
 class Serializer_SubCategory(serializers.ModelSerializer):
+    category_name = serializers.ReadOnlyField(source='category.name')
     class Meta:
         model = SubCategory
         fields = '__all__'
         
 
 class Serializer_Country(serializers.ModelSerializer):
+    
     class Meta:
         model=Countries
         fields='__all__'
         
 class Serializer_States(serializers.ModelSerializer):
+    CountryName = serializers.ReadOnlyField(source='CountryName.name')
     class Meta:
         model=States
         fields='__all__'
         
 class Serializer_Cities(serializers.ModelSerializer):
+    StateName = serializers.ReadOnlyField(source='StateName.name')
     class Meta:
         model=Cities
         fields='__all__'
